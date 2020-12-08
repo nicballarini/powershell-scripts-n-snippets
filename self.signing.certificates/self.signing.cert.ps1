@@ -57,9 +57,14 @@ function certSigning {
     $myCert = Get-ChildItem -Path:$cert
     #have to run separately from above section
  
-    $scriptWorkingDir = set-location -path $Env:USERPROFILE\Documents
-    $scriptPath = @('.\automate_ze_robots.ps1', ".\self-sign.cert.ps1")
-    $scriptPath | foreach {Set-AuthenticodeSignature -Certificate:$myCert -FilePath $_ }
+
+    $array = get-childitem -path .\ps.files\ -filter "*.ps1" | select name
+$array | foreach { $_.Name}
+
+
+    $scriptWorkingDir = set-location -path $Env:USERPROFILE\Documents\ps.files\
+    $scriptPath = get-childitem -path . -filter "*.ps1" | select name
+    $scriptPath | foreach {Set-AuthenticodeSignature -Certificate:$myCert -FilePath $_.Name }
 
     #used to check signed status of a script
     #Get-AuthenticodeSignature -FilePath $scriptPath
