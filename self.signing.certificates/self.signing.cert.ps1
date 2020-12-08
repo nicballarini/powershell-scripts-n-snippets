@@ -1,37 +1,96 @@
-#generate a new cert, dnsname should be your FQDN
-$cert = New-SelfSignedCertificate -CertStoreLocation Cert:\LocalMachine\My -dnsname "$env:computername.$env:userdnsdomain" -Type CodeSigningCert
-$cert
+function checkCert {
+    param
+    (
+        [String] $certLocation,
+        [String] $certFriendlyName,
+        [String] $certType
+    )
+    Write-host "Checking for Cert" -ForegroundColor Yellow
+    write-host $certLocation
+    write-host $certFriendlyName
+    write-host $certType
+    $theCert = (Get-ChildItem -path $certLocation | where-object {$_.Subject -eq "CN=$env:computername.$env:userdnsdomain" -and $_.FriendlyName -eq $certFriendlyName})
+    return $theCert.Thumbprint
+}
 
-#set a secure password to be applied to the cert
-$secPassword = ConvertTo-SecureString -String 'passw0rd!' -Force -AsPlainText
+function makeCert {
+    param
+    (
+        [String] $pass,
+        [String] $certLocation,
+        [String] $certType,
+        [String] $certFriendlyName
+    )
+    write-host "creating cert" -ForegroundColor Yellow
+    #generate a new cert, dnsname should be your FQDN
+    $cert = New-SelfSignedCertificate -CertStoreLocation $certLocation -dnsname "$env:computername.$env:userdnsdomain" -Type CodeSigningCert -FriendlyName $certFriendlyName
+    write-host $cert.Thumbprint -ForegroundColor Red
+    $password = ConvertTo-SecureString -String $pass -Force -AsPlainText
 
-#define the certpath and export the pfx file, if it needs to be shared.
-$certPath = "Cert:\LocalMachine\My\$($cert.Thumbprint)"
-Export-PfxCertificate -Cert $certPath -FilePath C:\selfcert.pfx -Password $secPassword -Force
+    #define the certpath and export the pfx file, if it needs to be shared.
+    $certPath = "$certLocation$($cert.Thumbprint)"
+    $certExport = Export-PfxCertificate -Cert $certPath -FilePath C:\selfcert.pfx -Password $password -Force
+    write-host "cert created" -ForegroundColor Green
+    return $cert.Thumbprint
+    
+}
 
-pause
+function importCert {
+    param
+    (
+        [String] $pass,
+        [String] $certLocation
+    )
+    ## import the pfx cert with password
+    write-host "importing cert" -ForegroundColor Yellow
+    $password = ConvertTo-SecureString -String $pass -Force -AsPlainText
 
-## import the pfx cert with password
-Import-PfxCertificate -Password $secPassword -FilePath C:\selfcert.pfx -CertStoreLocation 'Cert:\LocalMachine\Root'
+    $certImport = Import-PfxCertificate -Password $password -FilePath C:\selfcert.pfx -CertStoreLocation $certLocation
+    write-host "cert imported" -ForegroundColor Green
+}
 
-pause
+function certSigning {
+    param
+    (
+        [String] $cert
+    )
+    $myCert = Get-ChildItem -Path:$cert
+    #have to run separately from above section
+ 
+    $scriptWorkingDir = set-location -path $Env:USERPROFILE\Documents
+    $scriptPath = @('.\automate_ze_robots.ps1', ".\self-sign.cert.ps1")
+    $scriptPath | foreach {Set-AuthenticodeSignature -Certificate:$myCert -FilePath $_ }
 
-# run the next 4 lines to resign the script(s) you define.
+    #used to check signed status of a script
+    #Get-AuthenticodeSignature -FilePath $scriptPath
+}
 
-$certArray = Get-ChildItem -path:"Cert:\LocalMachine\My" 
-$certPath = "Cert:\LocalMachine\My\$($certArray[-1].Thumbprint)"
+function main {
+    param
+    (
+        [int] $i
+    )
+    $certLocation = "Cert:\\LocalMachine\My\"
+    $certRestoreLocation = "Cert:\\LocalMachine\Root\"
+    $certFriendlyName = "MyCodeSigningCert"
+    $certType = "CodeSigning"
+    $password = "passw0rd!"
+    $certTP = checkCert -certLocation $certLocation -certType $certType -certFriendlyName $certFriendlyName
+    if ($certTP)
+    {
+        write-host "Cert found"  -ForegroundColor Green
+    }
+    else
+    {
+        write-host "No matching code signing cert. Creating new cert" -ForegroundColor Yellow
+        write-host "before making cert"$certTP -ForegroundColor Yellow
+        $certTP = makeCert -pass $password -certLocation $certLocation -certType $certType -certFriendlyName $certFriendlyName
+        importCert -pass $password -certLocation $certRestoreLocation -certType $certType -certFriendlyName $certFriendlyName
+    }
+    if ($i = 1) {
+        certSigning -cert "$certStore$certTP"
+    }
+}
 
-$myCert = Get-ChildItem -Path:$certPath
-$myCert.EnhancedKeyUsageList
 
-pause
-# have to run separately from above section
-
-set-location -path $Env:USERPROFILE\Documents
-get-location
-$scriptPath = @('.\automate_ze_robots.ps1')
-$scriptPath | foreach {Set-AuthenticodeSignature -Certificate:$myCert -FilePath $_ }
-
-#optional, you'll see from the line above that the signing is valid, 
-# but it's nice to be able to check a given file
-Get-AuthenticodeSignature -FilePath $scriptPath
+main -i 1
