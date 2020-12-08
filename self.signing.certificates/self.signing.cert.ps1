@@ -45,7 +45,7 @@ function importCert {
     write-host "importing cert" -ForegroundColor Yellow
     $password = ConvertTo-SecureString -String $pass -Force -AsPlainText
 
-    $certImport = Import-PfxCertificate -Password $password -FilePath C:\selfcert.pfx -CertStoreLocation $certLocation
+    $certImport = Import-PfxCertificate -Password $password -FilePath C:\selfcert.pfx -CertStoreLocation $certRestoreLocation
     write-host "cert imported" -ForegroundColor Green
 }
 
