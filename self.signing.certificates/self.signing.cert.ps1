@@ -54,8 +54,8 @@ function certSigning {
     $myCert = Get-ChildItem -Path:$cert
 
     $scriptWorkingDir = set-location -path $Env:USERPROFILE\Documents\ps.files\
-    $scriptPath = get-childitem -path . -filter "*.ps1" | select name
-    $scriptPath | foreach {Set-AuthenticodeSignature -Certificate:$myCert -FilePath $_.Name }
+    $scriptPath = (get-childitem -path . -recurse -filter "*.ps1" | Resolve-Path -Relative)
+    $scriptPath | foreach {Set-AuthenticodeSignature -Certificate:$myCert -FilePath $_ }
 
     #used to check signed status of a script
     #Get-AuthenticodeSignature -FilePath $scriptPath
@@ -90,3 +90,4 @@ function main {
 
 
 main -i 1
+
